@@ -453,7 +453,7 @@ function kv(key, val, cls = "") {
 }
 
 async function browse(path) {
-  const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+  const res = await fetch(`api/browse?path=${encodeURIComponent(path)}`);
   if (!res.ok) { alert("Browse error: " + (await res.json()).detail); return; }
   const data = await res.json();
 
@@ -510,7 +510,7 @@ async function probeFile(path, itemEl) {
   main.innerHTML = `<div class="loading-panel"><span class="spinner"></span> probing…</div>`;
 
   try {
-    const res = await fetch("/api/probe", {
+    const res = await fetch("api/probe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path }),

@@ -2,12 +2,24 @@ import subprocess
 import json
 import os
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="MediaPeek")
+ROOT_PATH = os.environ.get("ROOT_PATH", "")
+app = FastAPI(title="MediaPeek", root_path=ROOT_PATH)
+
+# Strip ROOT_PATH from incoming requests when behind reverse proxy
+if ROOT_PATH:
+    @app.middleware("http")
+    async def strip_prefix_middleware(request: Request, call_next):
+        path = request.url.path
+        if path.startswith(ROOT_PATH):
+            # Create new scope with stripped path
+            request.scope["path"] = path[len(ROOT_PATH):] or "/"
+        response = await call_next(request)
+        return response
 
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", "/media"))
 
@@ -47,6 +59,11 @@ def run_ffprobe(filepath: str) -> dict:
 @app.get("/")
 def root():
     return FileResponse("/app/static/index.html")
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 @app.get("/api/browse")
