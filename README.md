@@ -9,7 +9,6 @@ A minimal self-hosted web UI for inspecting media file metadata via `ffprobe`.
 - **Backend**: FastAPI + Python 3.12 (Alpine)
 - **Frontend**: Single-page HTML/JS — no Node, no build step
 - **Engine**: `ffprobe` (from `ffmpeg` Alpine package)
-- **Image size**: ~80 MB
 
 ## Quick start
 
