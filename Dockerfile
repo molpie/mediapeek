@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir \
 
 FROM python:3.13-alpine3.23 AS runtime
 
-RUN apk add --no-cache ffmpeg \
+RUN apk add --no-cache ffmpeg curl \
     && apk cache clean 2>/dev/null || true
 
 RUN addgroup -S mediapeek && adduser -S -G mediapeek mediapeek
@@ -34,5 +34,8 @@ ENV MEDIA_ROOT=/media \
     PYTHONUNBUFFERED=1
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8080/ || exit 1
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
