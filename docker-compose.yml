@@ -1,0 +1,18 @@
+services:
+  mediapeek:
+    build: .
+    # image: ghcr.io/youruser/mediapeek:latest  # once published
+    container_name: mediapeek
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount your media directories as read-only under /media
+      - /path/to/your/media:/media:ro
+      # Multiple mounts are fine:
+      # - /mnt/nas/movies:/media/movies:ro
+      # - /mnt/nas/series:/media/series:ro
+      # - /mnt/nas/music:/media/music:ro
+    environment:
+      - MEDIA_ROOT=/media
+      - TZ=Europe/Rome
