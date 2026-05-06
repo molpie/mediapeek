@@ -582,6 +582,14 @@
       let currentPath = "";
       let activeFile = null;
       const SIDEBAR_WIDTH_KEY = "mediapeek.sidebarWidth";
+      const API_BASE = (() => {
+        const path = window.location.pathname || "/";
+        const withoutFile = path.endsWith("/")
+          ? path.slice(0, -1)
+          : path.slice(0, path.lastIndexOf("/"));
+        const prefix = withoutFile === "/" ? "" : withoutFile;
+        return `${prefix}/api`;
+      })();
 
       const VIDEO_EXTS = new Set([
         ".mp4",
@@ -666,7 +674,7 @@
 
         try {
           const res = await fetch(
-            `/api/browse?path=${encodeURIComponent(path)}`,
+            `${API_BASE}/browse?path=${encodeURIComponent(path)}`,
           );
           if (!res.ok) {
             let detail = `HTTP ${res.status}`;
@@ -746,7 +754,7 @@
         main.innerHTML = `<div class="loading-panel"><span class="spinner"></span> probing…</div>`;
 
         try {
-          const res = await fetch("/api/probe", {
+          const res = await fetch(`${API_BASE}/probe`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ path }),
