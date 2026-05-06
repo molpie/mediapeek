@@ -45,9 +45,9 @@
         height: 100vh;
         display: grid;
         grid-template-rows: 44px 1fr;
-        grid-template-columns: var(--sidebar-width) var(
-            --splitter-width
-          ) minmax(0, 1fr);
+        grid-template-columns:
+          var(--sidebar-width) var(--splitter-width)
+          minmax(0, 1fr);
         overflow: hidden;
       }
 
@@ -665,7 +665,9 @@
         setStatusBadge("loading", "loading");
 
         try {
-          const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+          const res = await fetch(
+            `/api/browse?path=${encodeURIComponent(path)}`,
+          );
           if (!res.ok) {
             let detail = `HTTP ${res.status}`;
             try {
