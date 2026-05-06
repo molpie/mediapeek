@@ -24,6 +24,8 @@
     --audio: #7ec8a0;
     --mono: 'IBM Plex Mono', monospace;
     --sans: 'IBM Plex Sans', sans-serif;
+    --sidebar-width: 300px;
+    --splitter-width: 8px;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -36,7 +38,7 @@
     height: 100vh;
     display: grid;
     grid-template-rows: 44px 1fr;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: var(--sidebar-width) var(--splitter-width) minmax(0, 1fr);
     overflow: hidden;
   }
 
@@ -86,6 +88,34 @@
     flex-column: column;
     flex-direction: column;
     overflow: hidden;
+  }
+
+  #splitter {
+    grid-row: 2;
+    background: linear-gradient(to right, var(--border) 0, var(--border) 1px, transparent 1px, transparent calc(100% - 1px), var(--border) calc(100% - 1px), var(--border) 100%);
+    cursor: col-resize;
+    position: relative;
+    user-select: none;
+    touch-action: none;
+  }
+
+  #splitter::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2px;
+    height: 30px;
+    transform: translate(-50%, -50%);
+    background: var(--border-bright);
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+  }
+
+  #splitter:hover::after,
+  #splitter.dragging::after {
+    opacity: 1;
+    background: var(--accent);
   }
 
   .sidebar-toolbar {
@@ -182,6 +212,14 @@
     overflow-y: auto;
     background: var(--bg);
     position: relative;
+    min-width: 0;
+  }
+
+  @media (max-width: 900px) {
+    :root {
+      --sidebar-width: 240px;
+      --splitter-width: 6px;
+    }
   }
 
   #main::-webkit-scrollbar { width: 4px; }
@@ -401,6 +439,8 @@
   <div id="file-list"></div>
 </div>
 
+<div id="splitter" role="separator" aria-label="Resize sidebar" aria-orientation="vertical"></div>
+
 <div id="main">
   <div class="welcome" id="welcome">
     <div class="welcome-icon">◈</div>
@@ -411,6 +451,7 @@
 <script>
 let currentPath = "";
 let activeFile = null;
+const SIDEBAR_WIDTH_KEY = "mediapeek.sidebarWidth";
 
 const VIDEO_EXTS = new Set([".mp4",".mkv",".avi",".mov",".wmv",".flv",".webm",".m4v",".mpg",".mpeg",".ts",".m2ts",".mts",".vob",".ogv",".3gp"]);
 const AUDIO_EXTS = new Set([".mp3",".flac",".aac",".ogg",".wav",".m4a",".wma",".opus",".aiff",".ape",".mka"]);
@@ -737,7 +778,58 @@ function evalFraction(str) {
   return (a / b).toFixed(3).replace(/\.?0+$/, "");
 }
 
+function clampSidebarWidth(width) {
+  const min = 180;
+  const max = Math.max(min, window.innerWidth - 240);
+  return Math.max(min, Math.min(max, width));
+}
+
+function setSidebarWidth(width, persist = true) {
+  const clamped = clampSidebarWidth(width);
+  document.documentElement.style.setProperty("--sidebar-width", `${clamped}px`);
+  if (persist) localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
+}
+
+function initSidebarResize() {
+  const splitter = document.getElementById("splitter");
+  const saved = parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY) || "", 10);
+  if (!Number.isNaN(saved)) setSidebarWidth(saved, false);
+
+  let dragging = false;
+
+  splitter.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    splitter.classList.add("dragging");
+    splitter.setPointerCapture(e.pointerId);
+  });
+
+  splitter.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    setSidebarWidth(e.clientX);
+  });
+
+  splitter.addEventListener("pointerup", (e) => {
+    dragging = false;
+    splitter.classList.remove("dragging");
+    splitter.releasePointerCapture(e.pointerId);
+  });
+
+  splitter.addEventListener("pointercancel", (e) => {
+    dragging = false;
+    splitter.classList.remove("dragging");
+    splitter.releasePointerCapture(e.pointerId);
+  });
+
+  splitter.addEventListener("dblclick", () => setSidebarWidth(300));
+
+  window.addEventListener("resize", () => {
+    const current = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width"), 10);
+    if (!Number.isNaN(current)) setSidebarWidth(current, false);
+  });
+}
+
 // Init
+initSidebarResize();
 browse("");
 </script>
 </body>
