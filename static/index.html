@@ -43,23 +43,27 @@
         font-family: var(--mono);
         font-size: 13px;
         height: 100vh;
-        display: grid;
-        grid-template-rows: 44px 1fr;
-        grid-template-columns:
-          var(--sidebar-width) var(--splitter-width)
-          minmax(0, 1fr);
+        display: flex;
+        flex-direction: column;
         overflow: hidden;
       }
 
       /* HEADER */
       header {
-        grid-column: 1 / -1;
         background: var(--bg2);
         border-bottom: 1px solid var(--border);
         display: flex;
         align-items: center;
         padding: 0 16px;
         gap: 16px;
+        min-height: 44px;
+      }
+
+      #content {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        overflow: hidden;
       }
 
       .logo {
@@ -124,43 +128,12 @@
         display: flex;
         flex-column: column;
         flex-direction: column;
+        width: var(--sidebar-width);
+        min-width: 180px;
+        max-width: min(70vw, calc(100vw - 220px));
+        flex: 0 0 auto;
+        resize: horizontal;
         overflow: hidden;
-      }
-
-      #splitter {
-        grid-row: 2;
-        background: linear-gradient(
-          to right,
-          var(--border) 0,
-          var(--border) 1px,
-          transparent 1px,
-          transparent calc(100% - 1px),
-          var(--border) calc(100% - 1px),
-          var(--border) 100%
-        );
-        cursor: col-resize;
-        position: relative;
-        user-select: none;
-        touch-action: none;
-      }
-
-      #splitter::after {
-        content: "";
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 2px;
-        height: 30px;
-        transform: translate(-50%, -50%);
-        background: var(--border-bright);
-        opacity: 0.7;
-        transition: opacity 0.15s ease;
-      }
-
-      #splitter:hover::after,
-      #splitter.dragging::after {
-        opacity: 1;
-        background: var(--accent);
       }
 
       .sidebar-toolbar {
@@ -285,12 +258,12 @@
         background: var(--bg);
         position: relative;
         min-width: 0;
+        flex: 1;
       }
 
       @media (max-width: 900px) {
         :root {
           --sidebar-width: 240px;
-          --splitter-width: 6px;
         }
       }
 
@@ -554,47 +527,30 @@
       <div class="header-badge">ffprobe</div>
     </header>
 
-    <div id="sidebar">
-      <div class="sidebar-toolbar">
-        <button class="btn-up" id="btn-up" onclick="goUp()" disabled>
-          ↑ up
-        </button>
-        <span class="current-path-label" id="current-path-label">/ root</span>
+    <div id="content">
+      <div id="sidebar">
+        <div class="sidebar-toolbar">
+          <button class="btn-up" id="btn-up" onclick="goUp()" disabled>
+            ↑ up
+          </button>
+          <span class="current-path-label" id="current-path-label">/ root</span>
+        </div>
+        <div id="file-list"></div>
       </div>
-      <div id="file-list"></div>
-    </div>
 
-    <div
-      id="splitter"
-      role="separator"
-      aria-label="Resize sidebar"
-      aria-orientation="vertical"
-    ></div>
-
-    <div id="main">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <div class="welcome-text">select a file to inspect</div>
+      <div id="main">
+        <div class="welcome" id="welcome">
+          <div class="welcome-icon">◈</div>
+          <div class="welcome-text">select a file to inspect</div>
+        </div>
       </div>
     </div>
 
     <script>
       let currentPath = "";
       let activeFile = null;
-      const SIDEBAR_WIDTH_KEY = "mediapeek.sidebarWidth";
-      const API_BASE = (() => {
-        const rawPath = window.location.pathname || "/";
-        const normalized = rawPath.replace(/\/+$/, "");
-        if (!normalized || normalized === "/") return "/api";
-
-        const lastSegment = normalized.split("/").pop() || "";
-        const isFilePath = lastSegment.includes(".");
-        const prefix = isFilePath
-          ? normalized.slice(0, normalized.lastIndexOf("/"))
-          : normalized;
-
-        return `${prefix}/api`;
-      })();
+      let API_BASE = "/api";
+      const API_TIMEOUT_MS = 30000;
 
       const VIDEO_EXTS = new Set([
         ".mp4",
@@ -673,25 +629,96 @@
         badge.textContent = label;
       }
 
+      function getApiCandidates() {
+        const rawPath = window.location.pathname || "/";
+        const normalized = rawPath.replace(/\/+$/, "");
+        const candidates = new Set(["/api"]);
+
+        if (normalized && normalized !== "/") {
+          const lastSegment = normalized.split("/").pop() || "";
+          const isFilePath = lastSegment.includes(".");
+          const prefix = isFilePath
+            ? normalized.slice(0, normalized.lastIndexOf("/"))
+            : normalized;
+          if (prefix) candidates.add(`${prefix}/api`);
+        }
+
+        return Array.from(candidates);
+      }
+
+      async function fetchJsonWithTimeout(
+        url,
+        options = {},
+        timeoutMs = API_TIMEOUT_MS,
+      ) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+          });
+          return response;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }
+
+      async function fetchBrowseData(path) {
+        const candidates = [
+          API_BASE,
+          ...getApiCandidates().filter((candidate) => candidate !== API_BASE),
+        ];
+        let lastError = "request failed";
+
+        for (const candidate of candidates) {
+          try {
+            const res = await fetchJsonWithTimeout(
+              `${candidate}/browse?path=${encodeURIComponent(path)}`,
+              { headers: { Accept: "application/json" } },
+              API_TIMEOUT_MS,
+            );
+
+            if (!res.ok) {
+              lastError = `HTTP ${res.status}`;
+              try {
+                const err = await res.json();
+                if (err?.detail) lastError = err.detail;
+              } catch {
+                // Keep HTTP status text fallback.
+              }
+              continue;
+            }
+
+            const contentType = res.headers.get("content-type") || "";
+            if (!contentType.includes("application/json")) {
+              lastError = "API returned non-JSON response";
+              continue;
+            }
+
+            const data = await res.json();
+            if (!data || !Array.isArray(data.entries)) {
+              lastError = "API payload is missing entries[]";
+              continue;
+            }
+
+            API_BASE = candidate;
+            return data;
+          } catch (error) {
+            lastError =
+              error?.name === "AbortError" ? "API timeout" : error.message;
+          }
+        }
+
+        throw new Error(lastError);
+      }
+
       async function browse(path) {
         const list = document.getElementById("file-list");
         setStatusBadge("loading", "loading");
 
         try {
-          const res = await fetch(
-            `${API_BASE}/browse?path=${encodeURIComponent(path)}`,
-          );
-          if (!res.ok) {
-            let detail = `HTTP ${res.status}`;
-            try {
-              const err = await res.json();
-              if (err?.detail) detail = err.detail;
-            } catch {
-              // Keep fallback HTTP detail if response is not JSON.
-            }
-            throw new Error(detail);
-          }
-          const data = await res.json();
+          const data = await fetchBrowseData(path);
 
           currentPath = data.current;
           document.getElementById("current-path-label").textContent =
@@ -1001,69 +1028,7 @@
         return (a / b).toFixed(3).replace(/\.?0+$/, "");
       }
 
-      function clampSidebarWidth(width) {
-        const min = 180;
-        const max = Math.max(min, window.innerWidth - 240);
-        return Math.max(min, Math.min(max, width));
-      }
-
-      function setSidebarWidth(width, persist = true) {
-        const clamped = clampSidebarWidth(width);
-        document.documentElement.style.setProperty(
-          "--sidebar-width",
-          `${clamped}px`,
-        );
-        if (persist) localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
-      }
-
-      function initSidebarResize() {
-        const splitter = document.getElementById("splitter");
-        const saved = parseInt(
-          localStorage.getItem(SIDEBAR_WIDTH_KEY) || "",
-          10,
-        );
-        if (!Number.isNaN(saved)) setSidebarWidth(saved, false);
-
-        let dragging = false;
-
-        splitter.addEventListener("pointerdown", (e) => {
-          dragging = true;
-          splitter.classList.add("dragging");
-          splitter.setPointerCapture(e.pointerId);
-        });
-
-        splitter.addEventListener("pointermove", (e) => {
-          if (!dragging) return;
-          setSidebarWidth(e.clientX);
-        });
-
-        splitter.addEventListener("pointerup", (e) => {
-          dragging = false;
-          splitter.classList.remove("dragging");
-          splitter.releasePointerCapture(e.pointerId);
-        });
-
-        splitter.addEventListener("pointercancel", (e) => {
-          dragging = false;
-          splitter.classList.remove("dragging");
-          splitter.releasePointerCapture(e.pointerId);
-        });
-
-        splitter.addEventListener("dblclick", () => setSidebarWidth(300));
-
-        window.addEventListener("resize", () => {
-          const current = parseInt(
-            getComputedStyle(document.documentElement).getPropertyValue(
-              "--sidebar-width",
-            ),
-            10,
-          );
-          if (!Number.isNaN(current)) setSidebarWidth(current, false);
-        });
-      }
-
       // Init
-      initSidebarResize();
       browse("");
     </script>
   </body>
