@@ -1,610 +1,807 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MediaPeek</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #0d0d0d;
-    --bg2: #141414;
-    --bg3: #1c1c1c;
-    --border: #2a2a2a;
-    --border-bright: #3d3d3d;
-    --text: #d4d4d4;
-    --text-dim: #666;
-    --text-dimmer: #444;
-    --accent: #e8c547;
-    --accent2: #4ea8de;
-    --accent3: #7ec8a0;
-    --danger: #e05252;
-    --video: #4ea8de;
-    --audio: #7ec8a0;
-    --mono: 'IBM Plex Mono', monospace;
-    --sans: 'IBM Plex Sans', sans-serif;
-    --sidebar-width: 300px;
-    --splitter-width: 8px;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 13px;
-    height: 100vh;
-    display: grid;
-    grid-template-rows: 44px 1fr;
-    grid-template-columns: var(--sidebar-width) var(--splitter-width) minmax(0, 1fr);
-    overflow: hidden;
-  }
-
-  /* HEADER */
-  header {
-    grid-column: 1 / -1;
-    background: var(--bg2);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    gap: 16px;
-  }
-
-  .logo {
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    color: var(--accent);
-    text-transform: uppercase;
-  }
-
-  .logo span { color: var(--text-dim); font-weight: 300; }
-
-  .header-path {
-    font-size: 11px;
-    color: var(--text-dim);
-    font-family: var(--mono);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-  }
-
-  .header-badge {
-    font-size: 10px;
-    color: var(--text-dimmer);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  /* SIDEBAR */
-  #sidebar {
-    background: var(--bg2);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-column: column;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  #splitter {
-    grid-row: 2;
-    background: linear-gradient(to right, var(--border) 0, var(--border) 1px, transparent 1px, transparent calc(100% - 1px), var(--border) calc(100% - 1px), var(--border) 100%);
-    cursor: col-resize;
-    position: relative;
-    user-select: none;
-    touch-action: none;
-  }
-
-  #splitter::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 2px;
-    height: 30px;
-    transform: translate(-50%, -50%);
-    background: var(--border-bright);
-    opacity: 0.7;
-    transition: opacity 0.15s ease;
-  }
-
-  #splitter:hover::after,
-  #splitter.dragging::after {
-    opacity: 1;
-    background: var(--accent);
-  }
-
-  .sidebar-toolbar {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 36px;
-  }
-
-  .btn-up {
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 3px 8px;
-    cursor: pointer;
-    transition: all 0.15s;
-    letter-spacing: 0.05em;
-  }
-  .btn-up:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-  .btn-up:disabled { opacity: 0.3; cursor: default; }
-
-  .current-path-label {
-    font-size: 10px;
-    color: var(--text-dimmer);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-  }
-
-  #file-list {
-    overflow-y: auto;
-    flex: 1;
-    padding: 4px 0;
-  }
-
-  #file-list::-webkit-scrollbar { width: 4px; }
-  #file-list::-webkit-scrollbar-track { background: transparent; }
-  #file-list::-webkit-scrollbar-thumb { background: var(--border-bright); }
-
-  .file-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    cursor: pointer;
-    border-left: 2px solid transparent;
-    transition: all 0.1s;
-    user-select: none;
-  }
-
-  .file-item:hover { background: var(--bg3); border-left-color: var(--border-bright); }
-  .file-item.active { background: var(--bg3); border-left-color: var(--accent); }
-  .file-item.loading { opacity: 0.6; pointer-events: none; }
-
-  .file-icon {
-    font-size: 11px;
-    width: 14px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-
-  .file-icon.dir { color: var(--accent); }
-  .file-icon.video { color: var(--video); }
-  .file-icon.audio { color: var(--audio); }
-
-  .file-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12px;
-  }
-
-  .file-size {
-    font-size: 10px;
-    color: var(--text-dimmer);
-    flex-shrink: 0;
-  }
-
-  .empty-state {
-    padding: 20px 12px;
-    color: var(--text-dimmer);
-    font-size: 11px;
-    text-align: center;
-  }
-
-  /* MAIN PANEL */
-  #main {
-    overflow-y: auto;
-    background: var(--bg);
-    position: relative;
-    min-width: 0;
-  }
-
-  @media (max-width: 900px) {
-    :root {
-      --sidebar-width: 240px;
-      --splitter-width: 6px;
-    }
-  }
-
-  #main::-webkit-scrollbar { width: 4px; }
-  #main::-webkit-scrollbar-thumb { background: var(--border); }
-
-  .welcome {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: 12px;
-    color: var(--text-dimmer);
-  }
-
-  .welcome-icon { font-size: 40px; opacity: 0.3; }
-  .welcome-text { font-size: 12px; letter-spacing: 0.05em; }
-
-  /* INFO PANELS */
-  .info-container {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    animation: fadeIn 0.2s ease;
-  }
-
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-
-  .panel {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-  }
-
-  .panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg3);
-  }
-
-  .panel-title {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: var(--text-dim);
-  }
-
-  .panel-badge {
-    font-size: 10px;
-    padding: 2px 6px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text-dimmer);
-    letter-spacing: 0.05em;
-  }
-
-  .panel-badge.video { border-color: var(--video); color: var(--video); }
-  .panel-badge.audio { border-color: var(--audio); color: var(--audio); }
-
-  /* KV GRID */
-  .kv-grid {
-    display: grid;
-    grid-template-columns: minmax(130px, auto) 1fr;
-    font-size: 12px;
-  }
-
-  .kv-row {
-    display: contents;
-  }
-
-  .kv-row:hover > * { background: var(--bg3); }
-
-  .kv-key {
-    padding: 5px 12px;
-    color: var(--text-dim);
-    border-bottom: 1px solid var(--border);
-    border-right: 1px solid var(--border);
-    white-space: nowrap;
-    font-size: 11px;
-  }
-
-  .kv-val {
-    padding: 5px 12px;
-    color: var(--text);
-    border-bottom: 1px solid var(--border);
-    word-break: break-all;
-    font-size: 11px;
-  }
-
-  .kv-val.highlight { color: var(--accent); font-weight: 500; }
-  .kv-val.video { color: var(--video); }
-  .kv-val.audio { color: var(--audio); }
-  .kv-val.dim { color: var(--text-dimmer); }
-
-  /* STREAMS LAYOUT */
-  .streams-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 12px;
-    padding: 12px;
-  }
-
-  /* LOADING SPINNER */
-  .spinner {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border: 1px solid var(--border-bright);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    vertical-align: middle;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .loading-panel {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 60px;
-    color: var(--text-dim);
-    font-size: 12px;
-  }
-
-  .error-panel {
-    margin: 16px;
-    padding: 12px 16px;
-    background: rgba(224, 82, 82, 0.08);
-    border: 1px solid rgba(224, 82, 82, 0.3);
-    color: var(--danger);
-    font-size: 12px;
-  }
-
-  /* FILE HEADER */
-  .file-header {
-    padding: 14px 16px 0;
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-  }
-
-  .file-header-name {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--text);
-    word-break: break-all;
-    font-family: var(--mono);
-  }
-
-  .file-header-ext {
-    font-size: 12px;
-    color: var(--accent);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-  }
-
-  /* BITRATE BAR */
-  .bitrate-bar-wrap {
-    padding: 2px 12px 8px;
-  }
-
-  .bitrate-bar {
-    height: 2px;
-    background: var(--border);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .bitrate-fill {
-    position: absolute;
-    top: 0; left: 0; bottom: 0;
-    background: var(--accent);
-    transition: width 0.5s ease;
-  }
-
-  .tag-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 8px 12px;
-  }
-
-  .tag {
-    font-size: 10px;
-    padding: 2px 7px;
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    letter-spacing: 0.04em;
-  }
-
-  .tag.lang { border-color: #555; color: var(--text); }
-  .tag.default { border-color: var(--accent); color: var(--accent); }
-  .tag.forced { border-color: var(--danger); color: var(--danger); }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="logo">Media<span>Peek</span></div>
-  <div class="header-path" id="header-path">/media</div>
-  <div class="header-badge">ffprobe</div>
-</header>
-
-<div id="sidebar">
-  <div class="sidebar-toolbar">
-    <button class="btn-up" id="btn-up" onclick="goUp()" disabled>↑ up</button>
-    <span class="current-path-label" id="current-path-label">/ root</span>
-  </div>
-  <div id="file-list"></div>
-</div>
-
-<div id="splitter" role="separator" aria-label="Resize sidebar" aria-orientation="vertical"></div>
-
-<div id="main">
-  <div class="welcome" id="welcome">
-    <div class="welcome-icon">◈</div>
-    <div class="welcome-text">select a file to inspect</div>
-  </div>
-</div>
-
-<script>
-let currentPath = "";
-let activeFile = null;
-const SIDEBAR_WIDTH_KEY = "mediapeek.sidebarWidth";
-
-const VIDEO_EXTS = new Set([".mp4",".mkv",".avi",".mov",".wmv",".flv",".webm",".m4v",".mpg",".mpeg",".ts",".m2ts",".mts",".vob",".ogv",".3gp"]);
-const AUDIO_EXTS = new Set([".mp3",".flac",".aac",".ogg",".wav",".m4a",".wma",".opus",".aiff",".ape",".mka"]);
-
-function fileType(ext) {
-  if (!ext) return "unknown";
-  if (VIDEO_EXTS.has(ext)) return "video";
-  if (AUDIO_EXTS.has(ext)) return "audio";
-  return "file";
-}
-
-function formatSize(bytes) {
-  if (!bytes) return "—";
-  if (bytes < 1024) return bytes + " B";
-  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + " KB";
-  if (bytes < 1024**3) return (bytes/1024/1024).toFixed(1) + " MB";
-  return (bytes/1024/1024/1024).toFixed(2) + " GB";
-}
-
-function formatDuration(secs) {
-  if (!secs) return "—";
-  const s = parseFloat(secs);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = (s % 60).toFixed(3);
-  if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(Math.floor(s%60)).padStart(2,"0")}`;
-  return `${m}:${String(Math.floor(s%60)).padStart(2,"0")}.${sec.split(".")[1]}`;
-}
-
-function formatBitrate(bps) {
-  if (!bps) return "—";
-  const b = parseInt(bps);
-  if (b > 1_000_000) return (b/1_000_000).toFixed(2) + " Mbps";
-  if (b > 1000) return (b/1000).toFixed(0) + " Kbps";
-  return b + " bps";
-}
-
-function kv(key, val, cls = "") {
-  return `<div class="kv-row"><div class="kv-key">${key}</div><div class="kv-val${cls ? " "+cls : ""}">${val ?? "—"}</div></div>`;
-}
-
-async function browse(path) {
-  const res = await fetch(`api/browse?path=${encodeURIComponent(path)}`);
-  if (!res.ok) { alert("Browse error: " + (await res.json()).detail); return; }
-  const data = await res.json();
-
-  currentPath = data.current;
-  document.getElementById("current-path-label").textContent = "/" + (currentPath || "");
-  document.getElementById("header-path").textContent = "/media" + (currentPath ? "/" + currentPath : "");
-  document.getElementById("btn-up").disabled = data.parent === null;
-
-  const list = document.getElementById("file-list");
-  list.innerHTML = "";
-
-  if (data.entries.length === 0) {
-    list.innerHTML = `<div class="empty-state">no media files found</div>`;
-    return;
-  }
-
-  for (const entry of data.entries) {
-    const type = entry.is_dir ? "dir" : fileType(entry.ext);
-    const icon = entry.is_dir ? "▶" : (type === "video" ? "▣" : "♪");
-    const sizeStr = entry.is_dir ? "" : formatSize(entry.size);
-
-    const item = document.createElement("div");
-    item.className = "file-item" + (activeFile === entry.path ? " active" : "");
-    item.dataset.path = entry.path;
-    item.dataset.isDir = entry.is_dir;
-    item.innerHTML = `
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MediaPeek</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0d0d0d;
+        --bg2: #141414;
+        --bg3: #1c1c1c;
+        --border: #2a2a2a;
+        --border-bright: #3d3d3d;
+        --text: #d4d4d4;
+        --text-dim: #666;
+        --text-dimmer: #444;
+        --accent: #e8c547;
+        --accent2: #4ea8de;
+        --accent3: #7ec8a0;
+        --danger: #e05252;
+        --video: #4ea8de;
+        --audio: #7ec8a0;
+        --mono: "IBM Plex Mono", monospace;
+        --sans: "IBM Plex Sans", sans-serif;
+        --sidebar-width: 300px;
+        --splitter-width: 8px;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 13px;
+        height: 100vh;
+        display: grid;
+        grid-template-rows: 44px 1fr;
+        grid-template-columns: var(--sidebar-width) var(
+            --splitter-width
+          ) minmax(0, 1fr);
+        overflow: hidden;
+      }
+
+      /* HEADER */
+      header {
+        grid-column: 1 / -1;
+        background: var(--bg2);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 16px;
+      }
+
+      .logo {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.15em;
+        color: var(--accent);
+        text-transform: uppercase;
+      }
+
+      .logo span {
+        color: var(--text-dim);
+        font-weight: 300;
+      }
+
+      .header-path {
+        font-size: 11px;
+        color: var(--text-dim);
+        font-family: var(--mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+      }
+
+      .header-badge {
+        font-size: 10px;
+        color: var(--text-dimmer);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .status-badge {
+        font-size: 10px;
+        padding: 3px 8px;
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: var(--bg3);
+      }
+
+      .status-badge.ok {
+        border-color: var(--accent3);
+        color: var(--accent3);
+      }
+
+      .status-badge.loading {
+        border-color: var(--accent2);
+        color: var(--accent2);
+      }
+
+      .status-badge.error {
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+
+      /* SIDEBAR */
+      #sidebar {
+        background: var(--bg2);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-column: column;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      #splitter {
+        grid-row: 2;
+        background: linear-gradient(
+          to right,
+          var(--border) 0,
+          var(--border) 1px,
+          transparent 1px,
+          transparent calc(100% - 1px),
+          var(--border) calc(100% - 1px),
+          var(--border) 100%
+        );
+        cursor: col-resize;
+        position: relative;
+        user-select: none;
+        touch-action: none;
+      }
+
+      #splitter::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 2px;
+        height: 30px;
+        transform: translate(-50%, -50%);
+        background: var(--border-bright);
+        opacity: 0.7;
+        transition: opacity 0.15s ease;
+      }
+
+      #splitter:hover::after,
+      #splitter.dragging::after {
+        opacity: 1;
+        background: var(--accent);
+      }
+
+      .sidebar-toolbar {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 36px;
+      }
+
+      .btn-up {
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 3px 8px;
+        cursor: pointer;
+        transition: all 0.15s;
+        letter-spacing: 0.05em;
+      }
+      .btn-up:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .btn-up:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+
+      .current-path-label {
+        font-size: 10px;
+        color: var(--text-dimmer);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+      }
+
+      #file-list {
+        overflow-y: auto;
+        flex: 1;
+        padding: 4px 0;
+      }
+
+      #file-list::-webkit-scrollbar {
+        width: 4px;
+      }
+      #file-list::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #file-list::-webkit-scrollbar-thumb {
+        background: var(--border-bright);
+      }
+
+      .file-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        cursor: pointer;
+        border-left: 2px solid transparent;
+        transition: all 0.1s;
+        user-select: none;
+      }
+
+      .file-item:hover {
+        background: var(--bg3);
+        border-left-color: var(--border-bright);
+      }
+      .file-item.active {
+        background: var(--bg3);
+        border-left-color: var(--accent);
+      }
+      .file-item.loading {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .file-icon {
+        font-size: 11px;
+        width: 14px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+
+      .file-icon.dir {
+        color: var(--accent);
+      }
+      .file-icon.video {
+        color: var(--video);
+      }
+      .file-icon.audio {
+        color: var(--audio);
+      }
+
+      .file-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+      }
+
+      .file-size {
+        font-size: 10px;
+        color: var(--text-dimmer);
+        flex-shrink: 0;
+      }
+
+      .empty-state {
+        padding: 20px 12px;
+        color: var(--text-dimmer);
+        font-size: 11px;
+        text-align: center;
+      }
+
+      /* MAIN PANEL */
+      #main {
+        overflow-y: auto;
+        background: var(--bg);
+        position: relative;
+        min-width: 0;
+      }
+
+      @media (max-width: 900px) {
+        :root {
+          --sidebar-width: 240px;
+          --splitter-width: 6px;
+        }
+      }
+
+      #main::-webkit-scrollbar {
+        width: 4px;
+      }
+      #main::-webkit-scrollbar-thumb {
+        background: var(--border);
+      }
+
+      .welcome {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        gap: 12px;
+        color: var(--text-dimmer);
+      }
+
+      .welcome-icon {
+        font-size: 40px;
+        opacity: 0.3;
+      }
+      .welcome-text {
+        font-size: 12px;
+        letter-spacing: 0.05em;
+      }
+
+      /* INFO PANELS */
+      .info-container {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        animation: fadeIn 0.2s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      .panel {
+        background: var(--bg2);
+        border: 1px solid var(--border);
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg3);
+      }
+
+      .panel-title {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        color: var(--text-dim);
+      }
+
+      .panel-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text-dimmer);
+        letter-spacing: 0.05em;
+      }
+
+      .panel-badge.video {
+        border-color: var(--video);
+        color: var(--video);
+      }
+      .panel-badge.audio {
+        border-color: var(--audio);
+        color: var(--audio);
+      }
+
+      /* KV GRID */
+      .kv-grid {
+        display: grid;
+        grid-template-columns: minmax(130px, auto) 1fr;
+        font-size: 12px;
+      }
+
+      .kv-row {
+        display: contents;
+      }
+
+      .kv-row:hover > * {
+        background: var(--bg3);
+      }
+
+      .kv-key {
+        padding: 5px 12px;
+        color: var(--text-dim);
+        border-bottom: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+        white-space: nowrap;
+        font-size: 11px;
+      }
+
+      .kv-val {
+        padding: 5px 12px;
+        color: var(--text);
+        border-bottom: 1px solid var(--border);
+        word-break: break-all;
+        font-size: 11px;
+      }
+
+      .kv-val.highlight {
+        color: var(--accent);
+        font-weight: 500;
+      }
+      .kv-val.video {
+        color: var(--video);
+      }
+      .kv-val.audio {
+        color: var(--audio);
+      }
+      .kv-val.dim {
+        color: var(--text-dimmer);
+      }
+
+      /* STREAMS LAYOUT */
+      .streams-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 12px;
+        padding: 12px;
+      }
+
+      /* LOADING SPINNER */
+      .spinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 1px solid var(--border-bright);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        vertical-align: middle;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .loading-panel {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 60px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      .error-panel {
+        margin: 16px;
+        padding: 12px 16px;
+        background: rgba(224, 82, 82, 0.08);
+        border: 1px solid rgba(224, 82, 82, 0.3);
+        color: var(--danger);
+        font-size: 12px;
+      }
+
+      /* FILE HEADER */
+      .file-header {
+        padding: 14px 16px 0;
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+
+      .file-header-name {
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--text);
+        word-break: break-all;
+        font-family: var(--mono);
+      }
+
+      .file-header-ext {
+        font-size: 12px;
+        color: var(--accent);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      /* BITRATE BAR */
+      .bitrate-bar-wrap {
+        padding: 2px 12px 8px;
+      }
+
+      .bitrate-bar {
+        height: 2px;
+        background: var(--border);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .bitrate-fill {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        background: var(--accent);
+        transition: width 0.5s ease;
+      }
+
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 12px;
+      }
+
+      .tag {
+        font-size: 10px;
+        padding: 2px 7px;
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        letter-spacing: 0.04em;
+      }
+
+      .tag.lang {
+        border-color: #555;
+        color: var(--text);
+      }
+      .tag.default {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .tag.forced {
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="logo">Media<span>Peek</span></div>
+      <div class="header-path" id="header-path">/media</div>
+      <div class="status-badge" id="status-badge">idle</div>
+      <div class="header-badge">ffprobe</div>
+    </header>
+
+    <div id="sidebar">
+      <div class="sidebar-toolbar">
+        <button class="btn-up" id="btn-up" onclick="goUp()" disabled>
+          ↑ up
+        </button>
+        <span class="current-path-label" id="current-path-label">/ root</span>
+      </div>
+      <div id="file-list"></div>
+    </div>
+
+    <div
+      id="splitter"
+      role="separator"
+      aria-label="Resize sidebar"
+      aria-orientation="vertical"
+    ></div>
+
+    <div id="main">
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">◈</div>
+        <div class="welcome-text">select a file to inspect</div>
+      </div>
+    </div>
+
+    <script>
+      let currentPath = "";
+      let activeFile = null;
+      const SIDEBAR_WIDTH_KEY = "mediapeek.sidebarWidth";
+
+      const VIDEO_EXTS = new Set([
+        ".mp4",
+        ".mkv",
+        ".avi",
+        ".mov",
+        ".wmv",
+        ".flv",
+        ".webm",
+        ".m4v",
+        ".mpg",
+        ".mpeg",
+        ".ts",
+        ".m2ts",
+        ".mts",
+        ".vob",
+        ".ogv",
+        ".3gp",
+      ]);
+      const AUDIO_EXTS = new Set([
+        ".mp3",
+        ".flac",
+        ".aac",
+        ".ogg",
+        ".wav",
+        ".m4a",
+        ".wma",
+        ".opus",
+        ".aiff",
+        ".ape",
+        ".mka",
+      ]);
+
+      function fileType(ext) {
+        if (!ext) return "unknown";
+        if (VIDEO_EXTS.has(ext)) return "video";
+        if (AUDIO_EXTS.has(ext)) return "audio";
+        return "file";
+      }
+
+      function formatSize(bytes) {
+        if (!bytes) return "—";
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        if (bytes < 1024 ** 3) return (bytes / 1024 / 1024).toFixed(1) + " MB";
+        return (bytes / 1024 / 1024 / 1024).toFixed(2) + " GB";
+      }
+
+      function formatDuration(secs) {
+        if (!secs) return "—";
+        const s = parseFloat(secs);
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = (s % 60).toFixed(3);
+        if (h > 0)
+          return `${h}:${String(m).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+        return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}.${sec.split(".")[1]}`;
+      }
+
+      function formatBitrate(bps) {
+        if (!bps) return "—";
+        const b = parseInt(bps);
+        if (b > 1_000_000) return (b / 1_000_000).toFixed(2) + " Mbps";
+        if (b > 1000) return (b / 1000).toFixed(0) + " Kbps";
+        return b + " bps";
+      }
+
+      function kv(key, val, cls = "") {
+        return `<div class="kv-row"><div class="kv-key">${key}</div><div class="kv-val${cls ? " " + cls : ""}">${val ?? "—"}</div></div>`;
+      }
+
+      function setStatusBadge(status, label) {
+        const badge = document.getElementById("status-badge");
+        badge.classList.remove("ok", "loading", "error");
+        if (status) badge.classList.add(status);
+        badge.textContent = label;
+      }
+
+      async function browse(path) {
+        const list = document.getElementById("file-list");
+        setStatusBadge("loading", "loading");
+
+        try {
+          const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+          if (!res.ok) {
+            let detail = `HTTP ${res.status}`;
+            try {
+              const err = await res.json();
+              if (err?.detail) detail = err.detail;
+            } catch {
+              // Keep fallback HTTP detail if response is not JSON.
+            }
+            throw new Error(detail);
+          }
+          const data = await res.json();
+
+          currentPath = data.current;
+          document.getElementById("current-path-label").textContent =
+            "/" + (currentPath || "");
+          document.getElementById("header-path").textContent =
+            "/media" + (currentPath ? "/" + currentPath : "");
+          document.getElementById("btn-up").disabled = data.parent === null;
+
+          list.innerHTML = "";
+
+          if (data.entries.length === 0) {
+            list.innerHTML = `<div class="empty-state">no media files found</div>`;
+            setStatusBadge("ok", "connected");
+            return;
+          }
+
+          for (const entry of data.entries) {
+            const type = entry.is_dir ? "dir" : fileType(entry.ext);
+            const icon = entry.is_dir ? "▶" : type === "video" ? "▣" : "♪";
+            const sizeStr = entry.is_dir ? "" : formatSize(entry.size);
+
+            const item = document.createElement("div");
+            item.className =
+              "file-item" + (activeFile === entry.path ? " active" : "");
+            item.dataset.path = entry.path;
+            item.dataset.isDir = entry.is_dir;
+            item.innerHTML = `
       <span class="file-icon ${type}">${icon}</span>
       <span class="file-name">${entry.name}</span>
       ${sizeStr ? `<span class="file-size">${sizeStr}</span>` : ""}
     `;
-    item.addEventListener("click", () => {
-      if (entry.is_dir) browse(entry.path);
-      else probeFile(entry.path, item);
-    });
-    list.appendChild(item);
-  }
-}
+            item.addEventListener("click", () => {
+              if (entry.is_dir) browse(entry.path);
+              else probeFile(entry.path, item);
+            });
+            list.appendChild(item);
+          }
+          setStatusBadge("ok", "connected");
+        } catch (error) {
+          list.innerHTML = `<div class="empty-state">browse error: ${error.message}</div>`;
+          setStatusBadge("error", "error");
+        }
+      }
 
-function goUp() {
-  const res = document.getElementById("btn-up");
-  if (!res.disabled) {
-    const parent = currentPath ? currentPath.split("/").slice(0,-1).join("/") : "";
-    browse(parent);
-  }
-}
+      function goUp() {
+        const res = document.getElementById("btn-up");
+        if (!res.disabled) {
+          const parent = currentPath
+            ? currentPath.split("/").slice(0, -1).join("/")
+            : "";
+          browse(parent);
+        }
+      }
 
-async function probeFile(path, itemEl) {
-  // Update active state
-  document.querySelectorAll(".file-item").forEach(el => el.classList.remove("active", "loading"));
-  itemEl.classList.add("active", "loading");
-  activeFile = path;
+      async function probeFile(path, itemEl) {
+        // Update active state
+        document
+          .querySelectorAll(".file-item")
+          .forEach((el) => el.classList.remove("active", "loading"));
+        itemEl.classList.add("active", "loading");
+        activeFile = path;
+        setStatusBadge("loading", "probing");
 
-  const main = document.getElementById("main");
-  main.innerHTML = `<div class="loading-panel"><span class="spinner"></span> probing…</div>`;
+        const main = document.getElementById("main");
+        main.innerHTML = `<div class="loading-panel"><span class="spinner"></span> probing…</div>`;
 
-  try {
-    const res = await fetch("api/probe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path }),
-    });
+        try {
+          const res = await fetch("/api/probe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path }),
+          });
 
-    itemEl.classList.remove("loading");
+          itemEl.classList.remove("loading");
 
-    if (!res.ok) {
-      const err = await res.json();
-      main.innerHTML = `<div class="error-panel">✗ ${err.detail}</div>`;
-      return;
-    }
+          if (!res.ok) {
+            const err = await res.json();
+            main.innerHTML = `<div class="error-panel">✗ ${err.detail}</div>`;
+            setStatusBadge("error", "error");
+            return;
+          }
 
-    const data = await res.json();
-    renderProbe(data, path);
+          const data = await res.json();
+          renderProbe(data, path);
+          setStatusBadge("ok", "connected");
+        } catch (e) {
+          itemEl.classList.remove("loading");
+          main.innerHTML = `<div class="error-panel">✗ ${e.message}</div>`;
+          setStatusBadge("error", "error");
+        }
+      }
 
-  } catch (e) {
-    itemEl.classList.remove("loading");
-    main.innerHTML = `<div class="error-panel">✗ ${e.message}</div>`;
-  }
-}
+      function renderProbe(data, path) {
+        const main = document.getElementById("main");
+        const fmt = data.format || {};
+        const streams = data.streams || [];
 
-function renderProbe(data, path) {
-  const main = document.getElementById("main");
-  const fmt = data.format || {};
-  const streams = data.streams || [];
+        const filename = path.split("/").pop();
+        const ext = "." + filename.split(".").pop().toLowerCase();
+        const type = fileType(ext);
 
-  const filename = path.split("/").pop();
-  const ext = "." + filename.split(".").pop().toLowerCase();
-  const type = fileType(ext);
+        const videoStreams = streams.filter((s) => s.codec_type === "video");
+        const audioStreams = streams.filter((s) => s.codec_type === "audio");
+        const subStreams = streams.filter((s) => s.codec_type === "subtitle");
+        const otherStreams = streams.filter(
+          (s) => !["video", "audio", "subtitle"].includes(s.codec_type),
+        );
 
-  const videoStreams = streams.filter(s => s.codec_type === "video");
-  const audioStreams = streams.filter(s => s.codec_type === "audio");
-  const subStreams = streams.filter(s => s.codec_type === "subtitle");
-  const otherStreams = streams.filter(s => !["video","audio","subtitle"].includes(s.codec_type));
+        // Bitrate for gauge
+        const brRaw = parseInt(fmt.bit_rate || 0);
+        const brMax = 50_000_000; // 50 Mbps ceiling for gauge
+        const brPct = Math.min(100, (brRaw / brMax) * 100);
 
-  // Bitrate for gauge
-  const brRaw = parseInt(fmt.bit_rate || 0);
-  const brMax = 50_000_000; // 50 Mbps ceiling for gauge
-  const brPct = Math.min(100, (brRaw / brMax) * 100);
+        // Tags
+        const tags = fmt.tags || {};
 
-  // Tags
-  const tags = fmt.tags || {};
-
-  let html = `
+        let html = `
     <div class="file-header">
       <span class="file-header-name">${filename}</span>
-      <span class="file-header-ext">${ext.replace(".","")}</span>
+      <span class="file-header-ext">${ext.replace(".", "")}</span>
     </div>
   `;
 
-  // ── FORMAT ──────────────────────────────────────────────────
-  html += `
+        // ── FORMAT ──────────────────────────────────────────────────
+        html += `
     <div class="info-container">
       <div class="panel">
         <div class="panel-header">
@@ -625,34 +822,36 @@ function renderProbe(data, path) {
       </div>
   `;
 
-  // Tags block
-  const tagEntries = Object.entries(tags).filter(([k]) => !["encoder","creation_time","handler_name"].includes(k));
-  if (tagEntries.length > 0) {
-    html += `
+        // Tags block
+        const tagEntries = Object.entries(tags).filter(
+          ([k]) => !["encoder", "creation_time", "handler_name"].includes(k),
+        );
+        if (tagEntries.length > 0) {
+          html += `
       <div class="panel">
         <div class="panel-header"><span class="panel-title">Tags / Metadata</span></div>
         <div class="kv-grid">
-          ${tagEntries.map(([k,v]) => kv(k, v)).join("")}
+          ${tagEntries.map(([k, v]) => kv(k, v)).join("")}
         </div>
       </div>
     `;
-  }
+        }
 
-  // ── VIDEO STREAMS ────────────────────────────────────────────
-  if (videoStreams.length > 0) {
-    html += `
+        // ── VIDEO STREAMS ────────────────────────────────────────────
+        if (videoStreams.length > 0) {
+          html += `
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">Video</span>
-          <span class="panel-badge video">${videoStreams.length} stream${videoStreams.length>1?"s":""}</span>
+          <span class="panel-badge video">${videoStreams.length} stream${videoStreams.length > 1 ? "s" : ""}</span>
         </div>
         <div class="streams-grid">
     `;
-    for (const s of videoStreams) {
-      const fps = s.r_frame_rate ? evalFraction(s.r_frame_rate) : null;
-      const dar = s.display_aspect_ratio || "—";
-      const stags = s.tags || {};
-      html += `
+          for (const s of videoStreams) {
+            const fps = s.r_frame_rate ? evalFraction(s.r_frame_rate) : null;
+            const dar = s.display_aspect_ratio || "—";
+            const stags = s.tags || {};
+            html += `
         <div>
           <div class="kv-grid">
             ${kv("index", "#" + s.index)}
@@ -661,7 +860,7 @@ function renderProbe(data, path) {
             ${kv("resolution", s.width && s.height ? `${s.width} × ${s.height}` : "—", "highlight")}
             ${kv("aspect ratio", dar)}
             ${kv("pixel format", s.pix_fmt || "—")}
-            ${kv("frame rate", fps ? `${fps} fps` : (s.r_frame_rate || "—"), "highlight")}
+            ${kv("frame rate", fps ? `${fps} fps` : s.r_frame_rate || "—", "highlight")}
             ${kv("avg frame rate", s.avg_frame_rate || "—")}
             ${kv("bitrate", formatBitrate(s.bit_rate), "highlight")}
             ${kv("bit depth", s.bits_per_raw_sample ? s.bits_per_raw_sample + " bit" : "—")}
@@ -680,25 +879,25 @@ function renderProbe(data, path) {
           </div>
         </div>
       `;
-    }
-    html += `</div></div>`;
-  }
+          }
+          html += `</div></div>`;
+        }
 
-  // ── AUDIO STREAMS ────────────────────────────────────────────
-  if (audioStreams.length > 0) {
-    html += `
+        // ── AUDIO STREAMS ────────────────────────────────────────────
+        if (audioStreams.length > 0) {
+          html += `
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">Audio</span>
-          <span class="panel-badge audio">${audioStreams.length} stream${audioStreams.length>1?"s":""}</span>
+          <span class="panel-badge audio">${audioStreams.length} stream${audioStreams.length > 1 ? "s" : ""}</span>
         </div>
         <div class="streams-grid">
     `;
-    for (const s of audioStreams) {
-      const stags = s.tags || {};
-      const isDefault = s.disposition?.default === 1;
-      const isForced = s.disposition?.forced === 1;
-      html += `
+          for (const s of audioStreams) {
+            const stags = s.tags || {};
+            const isDefault = s.disposition?.default === 1;
+            const isForced = s.disposition?.forced === 1;
+            html += `
         <div>
           <div class="kv-grid">
             ${kv("index", "#" + s.index)}
@@ -708,7 +907,7 @@ function renderProbe(data, path) {
             ${kv("channels", s.channels ?? "—", "highlight")}
             ${kv("channel layout", s.channel_layout || "—")}
             ${kv("sample format", s.sample_fmt || "—")}
-            ${kv("bits/sample", s.bits_per_raw_sample ? s.bits_per_raw_sample + " bit" : (s.bits_per_sample ? s.bits_per_sample + " bit" : "—"))}
+            ${kv("bits/sample", s.bits_per_raw_sample ? s.bits_per_raw_sample + " bit" : s.bits_per_sample ? s.bits_per_sample + " bit" : "—")}
             ${kv("bitrate", formatBitrate(s.bit_rate), "highlight")}
             ${kv("nb_frames", s.nb_frames || "—")}
             ${kv("duration", formatDuration(s.duration))}
@@ -716,121 +915,136 @@ function renderProbe(data, path) {
             ${stags.title ? kv("title", stags.title) : ""}
             ${stags.handler_name ? kv("handler", stags.handler_name, "dim") : ""}
           </div>
-          ${(isDefault || isForced || stags.language) ? `
+          ${
+            isDefault || isForced || stags.language
+              ? `
           <div class="tag-row">
             ${stags.language ? `<span class="tag lang">${stags.language}</span>` : ""}
             ${isDefault ? `<span class="tag default">default</span>` : ""}
             ${isForced ? `<span class="tag forced">forced</span>` : ""}
-          </div>` : ""}
+          </div>`
+              : ""
+          }
         </div>
       `;
-    }
-    html += `</div></div>`;
-  }
+          }
+          html += `</div></div>`;
+        }
 
-  // ── SUBTITLE STREAMS ─────────────────────────────────────────
-  if (subStreams.length > 0) {
-    html += `
+        // ── SUBTITLE STREAMS ─────────────────────────────────────────
+        if (subStreams.length > 0) {
+          html += `
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">Subtitles</span>
-          <span class="panel-badge">${subStreams.length} track${subStreams.length>1?"s":""}</span>
+          <span class="panel-badge">${subStreams.length} track${subStreams.length > 1 ? "s" : ""}</span>
         </div>
         <div class="kv-grid">
     `;
-    for (const s of subStreams) {
-      const stags = s.tags || {};
-      const isDefault = s.disposition?.default === 1;
-      const isForced = s.disposition?.forced === 1;
-      html += `
+          for (const s of subStreams) {
+            const stags = s.tags || {};
+            const isDefault = s.disposition?.default === 1;
+            const isForced = s.disposition?.forced === 1;
+            html += `
         ${kv(`#${s.index} codec`, s.codec_name || "—")}
         ${kv(`#${s.index} language`, stags.language || "—")}
         ${kv(`#${s.index} title`, stags.title || "—")}
-        ${kv(`#${s.index} flags`, [isDefault?"default":"", isForced?"forced":""].filter(Boolean).join(", ") || "—")}
+        ${kv(`#${s.index} flags`, [isDefault ? "default" : "", isForced ? "forced" : ""].filter(Boolean).join(", ") || "—")}
       `;
-    }
-    html += `</div></div>`;
-  }
+          }
+          html += `</div></div>`;
+        }
 
-  // ── OTHER STREAMS ────────────────────────────────────────────
-  if (otherStreams.length > 0) {
-    html += `
+        // ── OTHER STREAMS ────────────────────────────────────────────
+        if (otherStreams.length > 0) {
+          html += `
       <div class="panel">
         <div class="panel-header"><span class="panel-title">Other Streams</span></div>
         <div class="kv-grid">
     `;
-    for (const s of otherStreams) {
-      html += kv(`#${s.index} type`, s.codec_type || "—");
-      html += kv(`#${s.index} codec`, s.codec_name || "—");
-    }
-    html += `</div></div>`;
-  }
+          for (const s of otherStreams) {
+            html += kv(`#${s.index} type`, s.codec_type || "—");
+            html += kv(`#${s.index} codec`, s.codec_name || "—");
+          }
+          html += `</div></div>`;
+        }
 
-  html += `</div>`; // close info-container
+        html += `</div>`; // close info-container
 
-  main.innerHTML = html;
-}
+        main.innerHTML = html;
+      }
 
-function evalFraction(str) {
-  if (!str || !str.includes("/")) return parseFloat(str);
-  const [a, b] = str.split("/").map(Number);
-  if (!b) return 0;
-  return (a / b).toFixed(3).replace(/\.?0+$/, "");
-}
+      function evalFraction(str) {
+        if (!str || !str.includes("/")) return parseFloat(str);
+        const [a, b] = str.split("/").map(Number);
+        if (!b) return 0;
+        return (a / b).toFixed(3).replace(/\.?0+$/, "");
+      }
 
-function clampSidebarWidth(width) {
-  const min = 180;
-  const max = Math.max(min, window.innerWidth - 240);
-  return Math.max(min, Math.min(max, width));
-}
+      function clampSidebarWidth(width) {
+        const min = 180;
+        const max = Math.max(min, window.innerWidth - 240);
+        return Math.max(min, Math.min(max, width));
+      }
 
-function setSidebarWidth(width, persist = true) {
-  const clamped = clampSidebarWidth(width);
-  document.documentElement.style.setProperty("--sidebar-width", `${clamped}px`);
-  if (persist) localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
-}
+      function setSidebarWidth(width, persist = true) {
+        const clamped = clampSidebarWidth(width);
+        document.documentElement.style.setProperty(
+          "--sidebar-width",
+          `${clamped}px`,
+        );
+        if (persist) localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
+      }
 
-function initSidebarResize() {
-  const splitter = document.getElementById("splitter");
-  const saved = parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY) || "", 10);
-  if (!Number.isNaN(saved)) setSidebarWidth(saved, false);
+      function initSidebarResize() {
+        const splitter = document.getElementById("splitter");
+        const saved = parseInt(
+          localStorage.getItem(SIDEBAR_WIDTH_KEY) || "",
+          10,
+        );
+        if (!Number.isNaN(saved)) setSidebarWidth(saved, false);
 
-  let dragging = false;
+        let dragging = false;
 
-  splitter.addEventListener("pointerdown", (e) => {
-    dragging = true;
-    splitter.classList.add("dragging");
-    splitter.setPointerCapture(e.pointerId);
-  });
+        splitter.addEventListener("pointerdown", (e) => {
+          dragging = true;
+          splitter.classList.add("dragging");
+          splitter.setPointerCapture(e.pointerId);
+        });
 
-  splitter.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-    setSidebarWidth(e.clientX);
-  });
+        splitter.addEventListener("pointermove", (e) => {
+          if (!dragging) return;
+          setSidebarWidth(e.clientX);
+        });
 
-  splitter.addEventListener("pointerup", (e) => {
-    dragging = false;
-    splitter.classList.remove("dragging");
-    splitter.releasePointerCapture(e.pointerId);
-  });
+        splitter.addEventListener("pointerup", (e) => {
+          dragging = false;
+          splitter.classList.remove("dragging");
+          splitter.releasePointerCapture(e.pointerId);
+        });
 
-  splitter.addEventListener("pointercancel", (e) => {
-    dragging = false;
-    splitter.classList.remove("dragging");
-    splitter.releasePointerCapture(e.pointerId);
-  });
+        splitter.addEventListener("pointercancel", (e) => {
+          dragging = false;
+          splitter.classList.remove("dragging");
+          splitter.releasePointerCapture(e.pointerId);
+        });
 
-  splitter.addEventListener("dblclick", () => setSidebarWidth(300));
+        splitter.addEventListener("dblclick", () => setSidebarWidth(300));
 
-  window.addEventListener("resize", () => {
-    const current = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width"), 10);
-    if (!Number.isNaN(current)) setSidebarWidth(current, false);
-  });
-}
+        window.addEventListener("resize", () => {
+          const current = parseInt(
+            getComputedStyle(document.documentElement).getPropertyValue(
+              "--sidebar-width",
+            ),
+            10,
+          );
+          if (!Number.isNaN(current)) setSidebarWidth(current, false);
+        });
+      }
 
-// Init
-initSidebarResize();
-browse("");
-</script>
-</body>
+      // Init
+      initSidebarResize();
+      browse("");
+    </script>
+  </body>
 </html>
