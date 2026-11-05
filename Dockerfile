@@ -1,4 +1,4 @@
-FROM python:3.15-alpine3.23 AS builder
+FROM python:3.13-alpine3.24 AS builder
 
 RUN apk add --no-cache gcc musl-dev libffi-dev
 
@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir \
     "uvicorn[standard]" \
     python-multipart
 
-FROM python:3.15-alpine3.23 AS runtime
+FROM python:3.13-alpine3.24 AS runtime
 
 RUN apk add --no-cache ffmpeg curl \
     && apk cache clean 2>/dev/null || true
